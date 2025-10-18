@@ -199,13 +199,19 @@ def whisper_subtitle(uploaded_file, source_language):
     # 1. Configure device and model
     device = "cuda" if torch.cuda.is_available() else "cpu"
     compute_type = "float16" if torch.cuda.is_available() else "int8"
-    model_dir = download_model(
-        "kotoba-tech/kotoba-whisper-v2.0-faster",
-        download_folder="./",
-        redownload=False
-    )
+    if source_language == "Japanese":
+      model_dir = download_model(
+          "kotoba-tech/kotoba-whisper-v2.0-faster",
+          download_folder="./",
+          redownload=False
+      )
+    else:
+      model_dir = download_model(
+          "deepdml/faster-whisper-large-v3-turbo-ct2",
+          download_folder="./",
+          redownload=False
+      )
     model = WhisperModel(model_dir, device=device, compute_type=compute_type)
-    # model = WhisperModel("deepdml/faster-whisper-large-v3-turbo-ct2",device=device, compute_type=compute_type)
 
     # 2. Process audio file
     audio_file_path = get_audio_file(uploaded_file)
@@ -213,7 +219,7 @@ def whisper_subtitle(uploaded_file, source_language):
     # 3. Transcribe
     detected_language = source_language
     if source_language == "Automatic":
-        segments, info = model.transcribe(audio_file_path, word_timestamps=True)
+        segments, info = model.transcribe(audio_file_path, word_timestamps=False, condition_on_previous_text=False)
         detected_lang_code = info.language
         detected_language = get_language_name(detected_lang_code)
     else:
