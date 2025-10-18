@@ -182,15 +182,6 @@ def format_segments(segments):
         })
         speech_to_text += text + " "
 
-        for word in i.words:
-            word_data = {
-                "word": word.word.strip(),
-                "start": word.start,
-                "end": word.end
-            }
-            sentence_timestamp[sentence_id]["words"].append(word_data)
-            words_timestamp.append(word_data)
-
     return sentence_timestamp, words_timestamp, speech_to_text.strip()
 
 def get_audio_file(uploaded_file):
@@ -209,13 +200,12 @@ def whisper_subtitle(uploaded_file, source_language):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     compute_type = "float16" if torch.cuda.is_available() else "int8"
     model_dir = download_model(
-        "deepdml/faster-whisper-large-v3-turbo-ct2",
+        "kotoba-tech/kotoba-whisper-v2.0-faster",
         download_folder="./",
         redownload=False
     )
     model = WhisperModel(model_dir, device=device, compute_type=compute_type)
     # model = WhisperModel("deepdml/faster-whisper-large-v3-turbo-ct2",device=device, compute_type=compute_type)
-
 
     # 2. Process audio file
     audio_file_path = get_audio_file(uploaded_file)
@@ -228,7 +218,7 @@ def whisper_subtitle(uploaded_file, source_language):
         detected_language = get_language_name(detected_lang_code)
     else:
         lang_code = LANGUAGE_CODE[source_language]
-        segments, _ = model.transcribe(audio_file_path, word_timestamps=True, language=lang_code)
+        segments, _ = model.transcribe(audio_file_path, word_timestamps=False, language=lang_code, condition_on_previous_text=False)
 
     sentence_timestamps, word_timestamps, transcript_text = format_segments(segments)
 
@@ -244,29 +234,29 @@ def whisper_subtitle(uploaded_file, source_language):
     base_filename = os.path.splitext(os.path.basename(uploaded_file))[0][:30]
     srt_base = f"{SUBTITLE_FOLDER}/{base_filename}_{detected_language}.srt"
     clean_srt_path = clean_file_name(srt_base)
-    txt_path = clean_srt_path.replace(".srt", ".txt")
-    word_srt_path = clean_srt_path.replace(".srt", "_word_level.srt")
-    custom_srt_path = clean_srt_path.replace(".srt", "_Multiline.srt")
-    shorts_srt_path = clean_srt_path.replace(".srt", "_shorts.srt")
+    #txt_path = clean_srt_path.replace(".srt", ".txt")
+    #word_srt_path = clean_srt_path.replace(".srt", "_word_level.srt")
+    #custom_srt_path = clean_srt_path.replace(".srt", "_Multiline.srt")
+    #shorts_srt_path = clean_srt_path.replace(".srt", "_shorts.srt")
 
     # 6. Generate all subtitle files
     generate_srt_from_sentences(sentence_timestamps, srt_path=clean_srt_path)
-    word_level_srt(word_timestamps, srt_path=word_srt_path)
-    shorts_json=write_sentence_srt(
-        word_timestamps, output_file=shorts_srt_path, max_lines=1,
-        max_duration_s=2.0, max_chars_per_line=17
-    )
-    sentence_json=write_sentence_srt(
-        word_timestamps, output_file=custom_srt_path, max_lines=2,
-        max_duration_s=7.0, max_chars_per_line=38
-    )
+    #word_level_srt(word_timestamps, srt_path=word_srt_path)
+    #shorts_json=write_sentence_srt(
+    #    word_timestamps, output_file=shorts_srt_path, max_lines=1,
+    #    max_duration_s=2.0, max_chars_per_line=17
+    #)
+    #sentence_json=write_sentence_srt(
+    #    word_timestamps, output_file=custom_srt_path, max_lines=2,
+    #    max_duration_s=7.0, max_chars_per_line=38
+    #)
 
-    with open(txt_path, 'w', encoding='utf-8') as f:
-        f.write(transcript_text)
+    #with open(txt_path, 'w', encoding='utf-8') as f:
+    #    f.write(transcript_text)
 
     return (
-        clean_srt_path, custom_srt_path, word_srt_path, shorts_srt_path,
-        txt_path, transcript_text, sentence_json,shorts_json,detected_language
+        clean_srt_path, clean_srt_path, clean_srt_path, clean_srt_path,
+        clean_srt_path, clean_srt_path, clean_srt_path, clean_srt_path, detected_language
     )
 
 
