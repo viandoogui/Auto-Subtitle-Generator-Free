@@ -183,7 +183,7 @@ def format_segments(segments):
         })
         speech_to_text += text + " "
 
-    return sentence_timestamp, words_timestamp, speech_to_text.strip()
+    return sentence_timestamp
 
 def get_audio_file(uploaded_file):
     """Copies the uploaded media file to a temporary location for processing."""
@@ -202,7 +202,7 @@ def segments_to_dict(segment_list):
         })
   return result
 
-def whisper_subtitle(uploaded_file, source_language):
+def whisper_subtitle(uploaded_file, source_language, align):
     """
     Main transcription function. Loads the model, transcribes the audio,
     and generates subtitle files.
@@ -218,12 +218,15 @@ def whisper_subtitle(uploaded_file, source_language):
     )
     model = WhisperModel(model_dir, device=device, compute_type=compute_type)
 
-    stable_model = stable_whisper.load_faster_whisper(model_dir)
-
     # 2. Process audio file
     audio_file_path = get_audio_file(uploaded_file)
 
-    # 3. Transcribe
+    # 3. Prepare output file paths
+    base_filename = os.path.splitext(os.path.basename(uploaded_file))[0][:30]
+    srt_base = f"{SUBTITLE_FOLDER}/{base_filename}.srt"
+    clean_srt_path = clean_file_name(srt_base)
+
+    # 4. Transcribe
     detected_language = source_language
     if source_language == "Automatic":
         segments, info = model.transcribe(audio_file_path, word_timestamps=False)
@@ -233,47 +236,27 @@ def whisper_subtitle(uploaded_file, source_language):
         lang_code = LANGUAGE_CODE[source_language]
         segments, _ = model.transcribe(audio_file_path, word_timestamps=False, language=lang_code)
 
-    fw_dict = segments_to_dict(segments)
-    stable_result = stable_model.align_words(audio_file_path, fw_dict, detected_language)
-    stable_result.convert_to_segment_level()
-    print(stable_result)
-    
-    #text = "".join(segment.text for segment in segments)
+    if align == True:
+      fw_dict = segments_to_dict(segments)
+      stable_model = stable_whisper.load_faster_whisper(model_dir)
+      stable_result = stable_model.align_words(audio_file_path, fw_dict, detected_language)
+      stable_result.convert_to_segment_level()
+      stable_result.to_srt_vtt(clean_srt_path)
+    else:
+      sentence_timestamps = format_segments(segments)
+      generate_srt_from_sentences(sentence_timestamps, clean_srt_path)
 
-    #sentence_timestamps, word_timestamps, transcript_text = format_segments(segments)
-
-    # 4. Cleanup
+    # 5. Cleanup
     if os.path.exists(audio_file_path):
         os.remove(audio_file_path)
-    del stable_model
+    if align == True:
+      del stable_model
+      del model
+    else:
+      del model
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-
-    # 5. Prepare output file paths
-    base_filename = os.path.splitext(os.path.basename(uploaded_file))[0][:30]
-    srt_base = f"{SUBTITLE_FOLDER}/{base_filename}.srt"
-    clean_srt_path = clean_file_name(srt_base)
-    #txt_path = clean_srt_path.replace(".srt", ".txt")
-    #word_srt_path = clean_srt_path.replace(".srt", "_word_level.srt")
-    #custom_srt_path = clean_srt_path.replace(".srt", "_Multiline.srt")
-    #shorts_srt_path = clean_srt_path.replace(".srt", "_shorts.srt")
-    stable_result.to_srt_vtt(clean_srt_path)
-
-    # 6. Generate all subtitle files
-    #generate_srt_from_sentences(sentence_timestamps, srt_path=clean_srt_path)
-    #word_level_srt(word_timestamps, srt_path=word_srt_path)
-    #shorts_json=write_sentence_srt(
-    #    word_timestamps, output_file=shorts_srt_path, max_lines=1,
-    #    max_duration_s=2.0, max_chars_per_line=17
-    #)
-    #sentence_json=write_sentence_srt(
-    #    word_timestamps, output_file=custom_srt_path, max_lines=2,
-    #    max_duration_s=7.0, max_chars_per_line=38
-    #)
-
-    #with open(txt_path, 'w', encoding='utf-8') as f:
-    #    f.write(transcript_text)
 
     return clean_srt_path
 
@@ -538,7 +521,7 @@ def translate_subtitle(subtitles, source_language, destination_language):
 # --- 7. MAIN ORCHESTRATOR FUNCTION
 # ==============================================================================
 
-def subtitle_maker(media_file, source_lang, target_lang):
+def subtitle_maker(media_file, source_lang, target_lang, align=True):
     """
     The main entry point to generate and optionally translate subtitles.
 
@@ -546,13 +529,14 @@ def subtitle_maker(media_file, source_lang, target_lang):
         media_file (str): Path to the input media file.
         source_lang (str): The source language ('Automatic' for detection).
         target_lang (str): The target language for translation.
+        align (bool): Use stable-ts for alignment
 
     Returns:
         A tuple containing paths to all generated files and the transcript text.
     """
 
     try:
-        default_srt = whisper_subtitle(media_file, source_lang)
+        default_srt = whisper_subtitle(media_file, source_lang, align)
     except Exception as e:
         print(f"❌ An error occurred during transcription: {e}")
         return (None, None, None, None, None, None,None,None, f"Error: {e}")
