@@ -50,7 +50,7 @@ def ui1():
         generate_btn.click(
             fn=subtitle_maker,
             inputs=[upload_media, input_lang, output_lang],
-            outputs=[default_srt, translated_srt, customized_srt, word_level_srt, shorts_srt, transcript_txt, subtitle_json,word_json,transcript_box]
+            outputs=[default_srt]
         )
 
         input_lang.change(
@@ -271,7 +271,7 @@ def ui2():
         convert_btn.click(
             fn=json_to_srt,
             inputs=[json_input, srt_state],       
-            outputs=srt_file_out,
+            outputs=srt_file_out
         )
 
     return demo
