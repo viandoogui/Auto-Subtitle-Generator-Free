@@ -30,6 +30,7 @@ import pysrt
 from tqdm.auto import tqdm
 from faster_whisper import WhisperModel
 from deep_translator import GoogleTranslator
+import stable_whisper
 
 
 # ==============================================================================
@@ -191,6 +192,16 @@ def get_audio_file(uploaded_file):
     shutil.copy(uploaded_file, cleaned_path)
     return cleaned_path
 
+def segments_to_dict(segment_list):
+  result = []
+  for segment in segment_list:
+    result.append({
+            "start": segment.start,
+            "end": segment.end,
+            "text": segment.text.strip(),
+        })
+  return result
+
 def whisper_subtitle(uploaded_file, source_language):
     """
     Main transcription function. Loads the model, transcribes the audio,
@@ -199,19 +210,15 @@ def whisper_subtitle(uploaded_file, source_language):
     # 1. Configure device and model
     device = "cuda" if torch.cuda.is_available() else "cpu"
     compute_type = "float16" if torch.cuda.is_available() else "int8"
-    if source_language == "Japanese":
-      model_dir = download_model(
-          "kotoba-tech/kotoba-whisper-v2.0-faster",
-          download_folder="./",
-          redownload=False
-      )
-    else:
-      model_dir = download_model(
-          "deepdml/faster-whisper-large-v3-turbo-ct2",
-          download_folder="./",
-          redownload=False
-      )
+
+    model_dir = download_model(
+        "deepdml/faster-whisper-large-v3-turbo-ct2",
+        download_folder="./",
+        redownload=False
+    )
     model = WhisperModel(model_dir, device=device, compute_type=compute_type)
+
+    stable_model = stable_whisper.load_faster_whisper(model_dir)
 
     # 2. Process audio file
     audio_file_path = get_audio_file(uploaded_file)
@@ -219,34 +226,42 @@ def whisper_subtitle(uploaded_file, source_language):
     # 3. Transcribe
     detected_language = source_language
     if source_language == "Automatic":
-        segments, info = model.transcribe(audio_file_path, word_timestamps=False, condition_on_previous_text=False)
+        segments, info = model.transcribe(audio_file_path, word_timestamps=False)
         detected_lang_code = info.language
         detected_language = get_language_name(detected_lang_code)
     else:
         lang_code = LANGUAGE_CODE[source_language]
-        segments, _ = model.transcribe(audio_file_path, word_timestamps=False, language=lang_code, condition_on_previous_text=False)
+        segments, _ = model.transcribe(audio_file_path, word_timestamps=False, language=lang_code)
 
-    sentence_timestamps, word_timestamps, transcript_text = format_segments(segments)
+    fw_dict = segments_to_dict(segments)
+    stable_result = stable_model.align_words(audio_file_path, fw_dict, detected_language)
+    stable_result.convert_to_segment_level()
+    print(stable_result)
+    
+    #text = "".join(segment.text for segment in segments)
+
+    #sentence_timestamps, word_timestamps, transcript_text = format_segments(segments)
 
     # 4. Cleanup
     if os.path.exists(audio_file_path):
         os.remove(audio_file_path)
-    del model
+    del stable_model
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
     # 5. Prepare output file paths
     base_filename = os.path.splitext(os.path.basename(uploaded_file))[0][:30]
-    srt_base = f"{SUBTITLE_FOLDER}/{base_filename}_{detected_language}.srt"
+    srt_base = f"{SUBTITLE_FOLDER}/{base_filename}.srt"
     clean_srt_path = clean_file_name(srt_base)
     #txt_path = clean_srt_path.replace(".srt", ".txt")
     #word_srt_path = clean_srt_path.replace(".srt", "_word_level.srt")
     #custom_srt_path = clean_srt_path.replace(".srt", "_Multiline.srt")
     #shorts_srt_path = clean_srt_path.replace(".srt", "_shorts.srt")
+    stable_result.to_srt_vtt(clean_srt_path)
 
     # 6. Generate all subtitle files
-    generate_srt_from_sentences(sentence_timestamps, srt_path=clean_srt_path)
+    #generate_srt_from_sentences(sentence_timestamps, srt_path=clean_srt_path)
     #word_level_srt(word_timestamps, srt_path=word_srt_path)
     #shorts_json=write_sentence_srt(
     #    word_timestamps, output_file=shorts_srt_path, max_lines=1,
@@ -260,11 +275,7 @@ def whisper_subtitle(uploaded_file, source_language):
     #with open(txt_path, 'w', encoding='utf-8') as f:
     #    f.write(transcript_text)
 
-    return (
-        clean_srt_path, clean_srt_path, clean_srt_path, clean_srt_path,
-        clean_srt_path, clean_srt_path, clean_srt_path, clean_srt_path, detected_language
-    )
-
+    return clean_srt_path
 
 # ==============================================================================
 # --- 5. SUBTITLE GENERATION & FORMATTING
@@ -541,29 +552,12 @@ def subtitle_maker(media_file, source_lang, target_lang):
     """
 
     try:
-        (
-            default_srt, custom_srt, word_srt, shorts_srt,
-            txt_path, transcript, sentence_json,word_json,detected_lang
-        ) = whisper_subtitle(media_file, source_lang)
+        default_srt = whisper_subtitle(media_file, source_lang)
     except Exception as e:
         print(f"❌ An error occurred during transcription: {e}")
         return (None, None, None, None, None, None,None,None, f"Error: {e}")
-
-    translated_srt_path = None
-    if detected_lang and detected_lang != target_lang:
-        print(f"TRANSLATING from {detected_lang} to {target_lang}")
-        original_subs = pysrt.open(default_srt, encoding='utf-8')
-        translated_subs, _ = translate_subtitle(original_subs, detected_lang, target_lang)
-        base_name, ext = os.path.splitext(os.path.basename(default_srt))
-        translated_filename = f"{base_name}_to_{target_lang}{ext}"
-        translated_srt_path = os.path.join(SUBTITLE_FOLDER, translated_filename)
-        translated_subs.save(translated_srt_path, encoding='utf-8')
-
     
-    return (
-        default_srt, translated_srt_path, custom_srt, word_srt,
-        shorts_srt, txt_path,sentence_json,word_json, transcript
-    )
+    return default_srt
 
 
 # ==============================================================================
