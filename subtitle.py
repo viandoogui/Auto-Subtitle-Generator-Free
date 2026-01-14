@@ -239,7 +239,7 @@ def whisper_subtitle(uploaded_file, source_language, align):
     if align == True:
       fw_dict = segments_to_dict(segments)
       stable_model = stable_whisper.load_faster_whisper(model_dir)
-      stable_result = stable_model.align_words(audio_file_path, fw_dict, detected_language)
+      stable_result = stable_model.align_words(audio=audio_file_path, result=fw_dict, language=detected_language, suppress_word_ts=False)
       stable_result.convert_to_segment_level()
       stable_result.to_srt_vtt(clean_srt_path)
     else:
