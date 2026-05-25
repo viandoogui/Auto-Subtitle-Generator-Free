@@ -1,7 +1,7 @@
 faster-whisper==1.2.0
 stable-ts[fw]
 torch>=2.1.1 
-gradio>=5.9.1
+gradio>=6.7.0
 click>=8.1.7
 pysrt>=1.1.2
 deep_translator==1.11.4

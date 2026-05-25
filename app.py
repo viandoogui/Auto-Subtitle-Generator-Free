@@ -46,7 +46,7 @@ def ui1():
                   transcript_txt = gr.File(label="📄 Full Transcript (Text File)")
                   subtitle_json= gr.File(label="📄 Full Transcript (JSON File) To make .ass file")
                   word_json= gr.File(label="📄 Shorts Transcript (JSON File) To make .ass file")
-                  transcript_box = gr.Textbox(label="🗒️ Transcript Preview", lines=4,show_copy_button=True)
+                  transcript_box = gr.Textbox(label="🗒️ Transcript Preview", lines=4)
 
         generate_btn.click(
             fn=subtitle_maker,
@@ -248,7 +248,6 @@ def ui2():
                 output_prompt = gr.Textbox(
                     label="Copy & Paste this prompt in  https://aistudio.google.com/",
                     lines=20,
-                    show_copy_button=True
                     
                 )
 
@@ -289,7 +288,7 @@ def main(share,debug):
   demo1 = ui1()
   demo2 = ui2()
   custom_css = """.gradio-container { font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif; }"""
-  demo = gr.TabbedInterface([demo1, demo2], ["Generate SRT File", "SRT Translation"], title="",theme=gr.themes.Soft(),css=custom_css)
+  demo = gr.TabbedInterface([demo1, demo2], ["Generate SRT File", "SRT Translation"], title="")
   demo.queue().launch(share=share,debug=debug)
 if __name__ == "__main__":
     main()    
